@@ -21,18 +21,18 @@ metadata {
 	definition (name: "Living Connect TRV", namespace: "Danfoss", author: "AdamV") {
 		capability "Actuator"
 		capability "Temperature Measurement"
-		capability "Relative Humidity Measurement"
+		//capability "Relative Humidity Measurement"
 		capability "Thermostat"
 		capability "Configuration"
 		capability "Polling"
 		capability "Sensor"
         	capability "Battery"
 		
-		attribute "thermostatFanState", "string"
+		//attribute "thermostatFanState", "string"
 
-		command "switchMode"
-		command "switchFanMode"
-        	command "quickSetCool"
+		//command "switchMode"
+		//command "switchFanMode"
+        	//command "quickSetCool"
         	command "quickSetHeat"
 
 		fingerprint deviceId: "0x0804"
@@ -43,8 +43,8 @@ metadata {
 	simulator {
 		status "off"			: "command: 4003, payload: 00"
 		status "heat"			: "command: 4003, payload: 01"
-		status "cool"			: "command: 4003, payload: 02"
-		status "auto"			: "command: 4003, payload: 03"
+		//status "cool"			: "command: 4003, payload: 02"
+		//status "auto"			: "command: 4003, payload: 03"
 
 
 		// reply messages
@@ -121,9 +121,9 @@ def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpo
 		case 1:
 			map.name = "heatingSetpoint"
 			break;
-		case 2:
-			map.name = "coolingSetpoint"
-			break;
+		//case 2:
+		//	map.name = "coolingSetpoint"
+		//	break;
 		default:
 			return [:]
 	}
@@ -167,26 +167,27 @@ def zwaveEvent(physicalgraph.zwave.commands.thermostatoperatingstatev1.Thermosta
 		case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_HEATING:
 			map.value = "heating"
 			break
-		case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_COOLING:
-			map.value = "cooling"
-			break
-		case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_FAN_ONLY:
-			map.value = "fan only"
-			break
+		//case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_COOLING:
+		//	map.value = "cooling"
+		//	break
+		//case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_FAN_ONLY:
+		//	map.value = "fan only"
+		//	break
 		case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_PENDING_HEAT:
 			map.value = "pending heat"
 			break
-		case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_PENDING_COOL:
-			map.value = "pending cool"
-			break
-		case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_VENT_ECONOMIZER:
-			map.value = "vent economizer"
-			break
+		//case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_PENDING_COOL:
+		//	map.value = "pending cool"
+		//	break
+		//case physicalgraph.zwave.commands.thermostatoperatingstatev1.ThermostatOperatingStateReport.OPERATING_STATE_VENT_ECONOMIZER:
+		//	map.value = "vent economizer"
+		//	break
 	}
 	map.name = "thermostatOperatingState"
 	map
 }
 
+/*
 def zwaveEvent(physicalgraph.zwave.commands.thermostatfanstatev1.ThermostatFanStateReport cmd) {
 	def map = [name: "thermostatFanState", unit: ""]
 	switch (cmd.fanOperatingState) {
@@ -202,6 +203,7 @@ def zwaveEvent(physicalgraph.zwave.commands.thermostatfanstatev1.ThermostatFanSt
 	}
 	map
 }
+*/
 
 def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd) {
         def map = [ name: "battery", unit: "%" ]
@@ -220,7 +222,6 @@ def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd) {
 
 def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd)
 {
-       // state.count = state.count + 1
         log.debug("Device Wakeup: $cmd")
         def newSetPoint = state.setPoint
         def result = []
@@ -231,11 +232,7 @@ def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd)
         result << log.debug("sent response")
         
         delayBetween([result], 2000)
-        
-        
-
-
-}
+        }
 
 
 def zwaveEvent(physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport cmd) {
@@ -247,20 +244,21 @@ def zwaveEvent(physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeRepor
 		case physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_HEAT:
 			map.value = "heat"
 			break
-		case physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_AUXILIARY_HEAT:
-			map.value = "emergency heat"
-			break
-		case physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_COOL:
-			map.value = "cool"
-			break
-		case physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_AUTO:
-			map.value = "auto"
-			break
+	//	case physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_AUXILIARY_HEAT:
+	//		map.value = "emergency heat"
+	//		break
+	//	case physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_COOL:
+	//		map.value = "cool"
+	//		break
+	//	case physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_AUTO:
+	//		map.value = "auto"
+	//		break
 	}
 	map.name = "thermostatMode"
 	map
 }
 
+/*
 def zwaveEvent(physicalgraph.zwave.commands.thermostatfanmodev3.ThermostatFanModeReport cmd) {
 	def map = [:]
 	switch (cmd.fanMode) {
@@ -278,18 +276,20 @@ def zwaveEvent(physicalgraph.zwave.commands.thermostatfanmodev3.ThermostatFanMod
 	map.displayed = false
 	map
 }
+*/
 
 def zwaveEvent(physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeSupportedReport cmd) {
 	def supportedModes = ""
 	if(cmd.off) { supportedModes += "off " }
 	if(cmd.heat) { supportedModes += "heat " }
 	if(cmd.auxiliaryemergencyHeat) { supportedModes += "emergency heat " }
-	if(cmd.cool) { supportedModes += "cool " }
-	if(cmd.auto) { supportedModes += "auto " }
+//	if(cmd.cool) { supportedModes += "cool " }
+//	if(cmd.auto) { supportedModes += "auto " }
 
 	state.supportedModes = supportedModes
 }
 
+/*
 def zwaveEvent(physicalgraph.zwave.commands.thermostatfanmodev3.ThermostatFanModeSupportedReport cmd) {
 	def supportedFanModes = ""
 	if(cmd.auto) { supportedFanModes += "fanAuto " }
@@ -298,6 +298,7 @@ def zwaveEvent(physicalgraph.zwave.commands.thermostatfanmodev3.ThermostatFanMod
 
 	state.supportedFanModes = supportedFanModes
 }
+*/
 
 def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd) {
 	log.debug "Zwave event received: $cmd"
@@ -360,14 +361,19 @@ def setHeatingSetpoint(Double degrees, Integer delay) {
 	], delay)
 }
 
+/*
 def quickSetCool(degrees) {
 	setCoolingSetpoint(degrees, 1000)
 }
+*/
 
+/*
 def setCoolingSetpoint(degrees, delay = 30000) {
 	setCoolingSetpoint(degrees.toDouble(), delay)
 }
+*/
 
+/*
 def setCoolingSetpoint(Double degrees, Integer delay = 30000) {
     log.trace "setCoolingSetpoint($degrees, $delay)"
 	def deviceScale = state.scale ?: 1
@@ -389,6 +395,7 @@ def setCoolingSetpoint(Double degrees, Integer delay = 30000) {
 		zwave.thermostatSetpointV1.thermostatSetpointGet(setpointType: 2).format()
 	], delay)
 }
+*/
 
 def configure() {
 	delayBetween([
@@ -399,7 +406,8 @@ def configure() {
 }
 
 def modes() {
-	["off", "heat", "cool", "auto", "emergency heat"]
+	["off", "heat"] 
+	//, "cool", "auto", "emergency heat"]
 }
 
 def switchMode() {
@@ -432,6 +440,7 @@ def switchToMode(nextMode) {
 	}
 }
 
+/*
 def switchFanMode() {
 	def currentMode = device.currentState("thermostatFanMode")?.value
 	def lastTriedMode = state.lastTriedFanMode ?: currentMode ?: "off"
@@ -444,7 +453,8 @@ def switchFanMode() {
 	}
 	switchToFanMode(nextMode)
 }
-
+*/
+/*
 def switchToFanMode(nextMode) {
 	def supportedFanModes = getDataByName("supportedFanModes")
 	if(supportedFanModes && !supportedFanModes.contains(nextMode)) log.warn "thermostat mode '$nextMode' is not supported"
@@ -462,6 +472,7 @@ def switchToFanMode(nextMode) {
 	if(returnCommand) state.lastTriedFanMode = nextMode
 	returnCommand
 }
+*/
 
 def getDataByName(String name) {
 	state[name] ?: device.getDataValue(name)
@@ -470,8 +481,8 @@ def getDataByName(String name) {
 def getModeMap() { [
 	"off": 0,
 	"heat": 1,
-	"cool": 2,
-	"auto": 3,
+//	"cool": 2,
+//	"auto": 3,
 	"emergency heat": 4
 ]}
 
@@ -482,18 +493,22 @@ def setThermostatMode(String value) {
 	], standardDelay)
 }
 
+/*
 def getFanModeMap() { [
 	"auto": 0,
 	"on": 1,
 	"circulate": 6
 ]}
+*/
 
+/*
 def setThermostatFanMode(String value) {
 	delayBetween([
 		zwave.thermostatFanModeV3.thermostatFanModeSet(fanMode: fanModeMap[value]).format(),
 		zwave.thermostatFanModeV3.thermostatFanModeGet().format()
 	], standardDelay)
 }
+*/
 
 def off() {
 	delayBetween([
@@ -516,41 +531,46 @@ def emergencyHeat() {
 	], standardDelay)
 }
 
+/*
 def cool() {
 	delayBetween([
 		zwave.thermostatModeV2.thermostatModeSet(mode: 2).format(),
 		zwave.thermostatModeV2.thermostatModeGet().format()
 	], standardDelay)
 }
-
+*/
+/*
 def auto() {
 	delayBetween([
 		zwave.thermostatModeV2.thermostatModeSet(mode: 3).format(),
 		zwave.thermostatModeV2.thermostatModeGet().format()
 	], standardDelay)
 }
-
+*/
+/*
 def fanOn() {
 	delayBetween([
 		zwave.thermostatFanModeV3.thermostatFanModeSet(fanMode: 1).format(),
 		zwave.thermostatFanModeV3.thermostatFanModeGet().format()
 	], standardDelay)
 }
-
+*/
+/*
 def fanAuto() {
 	delayBetween([
 		zwave.thermostatFanModeV3.thermostatFanModeSet(fanMode: 0).format(),
 		zwave.thermostatFanModeV3.thermostatFanModeGet().format()
 	], standardDelay)
 }
-
+*/
+/*
 def fanCirculate() {
 	delayBetween([
 		zwave.thermostatFanModeV3.thermostatFanModeSet(fanMode: 6).format(),
 		zwave.thermostatFanModeV3.thermostatFanModeGet().format()
 	], standardDelay)
 }
-
+*/
 private getStandardDelay() {
 	1000
 }
