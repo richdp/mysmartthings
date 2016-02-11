@@ -26,14 +26,14 @@ metadata {
 		capability "Configuration"
 		capability "Polling"
 		capability "Sensor"
-        capability "Battery"
+        	capability "Battery"
 		
 		attribute "thermostatFanState", "string"
 
 		command "switchMode"
 		command "switchFanMode"
-        command "quickSetCool"
-        command "quickSetHeat"
+        	command "quickSetCool"
+        	command "quickSetHeat"
 
 		fingerprint deviceId: "0x0804"
 		fingerprint inClusters: "0x43,0x40,0x44,0x31,0x80,0x46,0x81,0x72,0x8F,0x75,0x86,0x84,0xEF,0x46,0x81,0x8F"
@@ -72,46 +72,13 @@ metadata {
 			}
         }
 
-/*        
-		valueTile("temperature", "device.temperature", width: 2, height: 2) {
-			state("temperature", label:'${currentValue}°',
-				backgroundColors:[
-					[value: 31, color: "#153591"],
-					[value: 44, color: "#1e9cbb"],
-					[value: 59, color: "#90d2a7"],
-					[value: 74, color: "#44b621"],
-					[value: 84, color: "#f1d801"],
-					[value: 95, color: "#d04e00"],
-					[value: 96, color: "#bc2323"]
-				]
-			)
-		}
-*/
-/*		standardTile("fanMode", "device.thermostatFanMode", inactiveLabel: false, decoration: "flat") {
-			state "fanAuto", label:'${name}', action:"switchFanMode"
-			state "fanOn", label:'${name}', action:"switchFanMode"
-			state "fanCirculate", label:'${name}', action:"switchFanMode"
-		}
-        
-*/
-        
+
         valueTile("battery", "device.battery", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
          	tileAttribute ("device.battery", key: "PRIMARY_CONTROL"){
                         state "battery", label:'${currentValue}% battery', unit:""
         	}
         }
-	//	controlTile("heatSliderControl", "device.heatingSetpoint", "slider", height: 2, width: 6, inactiveLabel: false) {
-	//		state "setHeatingSetpoint", action:"quickSetHeat", backgroundColor:"#d04e00"
-	//	}
-//		valueTile("heatingSetpoint", "device.heatingSetpoint", inactiveLabel: false, decoration: "flat") {
-//			state "heat", label:'${currentValue}° heat', backgroundColor:"#ffffff"
-//		}
-//		controlTile("coolSliderControl", "device.coolingSetpoint", "slider", height: 1, width: 2, inactiveLabel: false) {
-//			state "setCoolingSetpoint", action:"quickSetCool", backgroundColor: "#1e9cbb"
-//		}
-//		valueTile("coolingSetpoint", "device.coolingSetpoint", inactiveLabel: false, decoration: "flat") {
-//			state "cool", label:'${currentValue}° cool', backgroundColor:"#ffffff"
-//		}
+
 		standardTile("refresh", "device.thermostatMode", inactiveLabel: false, decoration: "flat") {
 			state "default", action:"polling.poll", icon:"st.secondary.refresh"
 		}
@@ -123,50 +90,7 @@ metadata {
 	}
 }
 
-/*
-def parse(String description)
-{
-	log.debug("Raw description: $description")
-    def map = createEvent(zwaveEvent(zwave.parse(description, [0x43:2, 0x31: 3])))
-	if (!map) {
-		return null
-	}
-	def result = [map]
-	if (map.isStateChange && map.name in ["heatingSetpoint","coolingSetpoint","thermostatMode"]) {
-		def map2 = [
-			name: "thermostatSetpoint",
-			unit: getTemperatureScale()
-		]
-		if (map.name == "thermostatMode") {
-			state.lastTriedMode = map.value
-			if (map.value == "cool") {
-				map2.value = device.latestValue("coolingSetpoint")
-				log.info "THERMOSTAT, latest cooling setpoint = ${map2.value}"
-			}
-			else {
-				map2.value = device.latestValue("heatingSetpoint")
-				log.info "THERMOSTAT, latest heating setpoint = ${map2.value}"
-			}
-		}
-		else {
-			def mode = device.latestValue("thermostatMode")
-			log.info "THERMOSTAT, latest mode = ${mode}"
-			if ((map.name == "heatingSetpoint" && mode == "heat") || (map.name == "coolingSetpoint" && mode == "cool")) {
-				map2.value = map.value
-				map2.unit = map.unit
-			}
-		}
-		if (map2.value != null) {
-			log.debug "THERMOSTAT, adding setpoint event: $map"
-			result << createEvent(map2)
-		}
-	} else if (map.name == "thermostatFanMode" && map.isStateChange) {
-		state.lastTriedFanMode = map.value
-	}
-	log.debug "Parse returned $result"
-	result
-}
-*/
+
 def parse(String description) {
 	state.count = 0
     def results = []
@@ -309,45 +233,8 @@ def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd)
         delayBetween([result], 2000)
         
         
-     //   def result = [createEvent(descriptionText: "${device.displayName} woke up", isStateChange: false)]
-	
-   // if (state.count == 2){
-    
-  //  def result = []
-        // Only ask for battery if we haven't had a BatteryReport in a while
-    //    if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) {
-    //            result << response(zwave.batteryV1.batteryGet())
-    //            result << response("delay 1200")  // leave time for device to respond to batteryGet
-    //    }
-    //    def deviceScale = state.scale ?: 1
-     //   def p = (state.precision == null) ? 1 : state.precision
-     //   result << response(zwave.thermostatSetpointV1.thermostatSetpointSet(setpointType: 1, scale: deviceScale, precision: p, scaledValue: state.setPoint))
-     //   result << response(zwave.thermostatSetpointV1.thermostatSetpointGet(setpointType: 1))
-     //   result << response(setHeatingSetpoint(state.setPoint, 1000))
-     //   result << response("delay 1000")
-      //  result << setHeatingSetpoint(state.setPoint, 1000)
-       // result << response("delay 1000")
-      //  setHeatingSetpoint(state.setPoint, 1000)
-       // result << response(zwave.wakeUpV2.wakeUpNoMoreInformation())
-        // setHeatingSetpoint(state.setPoint, 1000)
-       //		def deviceScale = state.scale ?: 1
-		//	def deviceScaleString = deviceScale == 2 ? "C" : "F"
-    	//	def locationScale = getTemperatureScale()
-		//	def p = (state.precision == null) ? 1 : state.precision
 
 
-     /*   if (state.count == 3){
-        result
-        log.debug("response fired count: $state.count")
-        state.count = 0
-        }
-        */
-    //    poll()
-    //log.debug("response fired count: $state.count")
-    //state.count = 0
-   //}
-   
- //  result
 }
 
 
@@ -447,14 +334,9 @@ def quickSetHeat(upDown) {
         log.debug("New State Set Point: $state.setPoint")
     	setHeatingSetpoint(newSetPoint, 1000)
     }
-	//setHeatingSetpoint(degrees, 1000)
-    // log.debug("Degrees at quicksetheat: $degrees")
+
 }
 
-//def setHeatingSetpoint(degrees, delay = 30000) {
-//	setHeatingSetpoint(degrees.toDouble(), delay)
-  //      log.debug("Degrees at setheatpoint: $degrees")
-//}
 
 def setHeatingSetpoint(Double degrees, Integer delay) {
 	log.trace "setHeatingSetpoint($degrees, $delay)"
