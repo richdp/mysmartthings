@@ -12,29 +12,21 @@
  *
  * 
  */
+
 metadata {
-	definition (name: "LC13 TRV V1.1", namespace: "Danfoss", author: "RichardP") {
-		capability "Actuator"
-		capability "Temperature Measurement"
-		capability "Relative Humidity Measurement"
-		capability "Thermostat"
-		capability "Configuration"
-		capability "Polling"
-		capability "Sensor"
-        capability "Battery"
-		
-		attribute "thermostatFanState", "string"
-
-		command "switchMode"
-		command "switchFanMode"
-        command "quickSetCool"
-        command "quickSetHeat"
-
+	definition (name: "Danfoss LC13 TRV V1.1", namespace: "richdp", author: "RichardP") {
+		capability "actuator"
+        capability "battery"
+        capability "configuration"
+        capability "polling"
+        capability "refresh"
+        capability "thermostat setpoint"
+        
 		fingerprint deviceId: "0x0804"
 		fingerprint inClusters: "0x80, 0x46, 0x81, 0x72, 0x8F, 0x75, 0x43, 0x86, 0x84"
 	}
 
-	// simulator metadata
+// simulator metadata
 simulator {
 //		status "off"			: "command: 4003, payload: 00"
 //		status "heat"			: "command: 4003, payload: 01"
@@ -71,10 +63,24 @@ simulator {
 			state "setNextHeatingSetpoint", label:'${currentValue}° next', backgroundColor:"#ffffff"
 		}
 
+        valueTile("battery", "device.battery", inactiveLabel: false, decoration: "flat", width: 1, height: 1) {
+         	tileAttribute ("device.battery", key: "PRIMARY_CONTROL"){
+                        state "battery", label:'${currentValue}% battery', unit:""}
+        }
+	
+		standardTile("refresh", "device.thermostatMode", inactiveLabel: false, decoration: "flat", width: 1, height: 1) {
+			state "default", action:"polling.poll", icon:"st.secondary.refresh"
+		}
+
+		standardTile("configure", "device.configure", inactiveLabel: false, decoration: "flat", width: 1, height: 1) {
+			state "configure", label:'', action:"configuration.configure", icon:"st.secondary.configure"
+		}
 		main "temperature"
-		details(["temperature", "heatSliderControl", "nextHeatingSetpoint"])
+		details(["temperature", "heatSliderControl", "nextHeatingSetpoint", "battery", "refresh", "configure"])
 	}
 }
+
+// Parse Device 
 
 def parse(String description) 
 {
@@ -95,24 +101,7 @@ def parse(String description)
 
 
 // Event Generation
-def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd)
-{
-	def cmdScale = cmd.scale == 1 ? "F" : "C"
-	def map = [:]
-	map.value = convertTemperatureIfNeeded(cmd.scaledValue, cmdScale, cmd.precision)
-	map.unit = getTemperatureScale()
-	map.displayed = false
-    map.name = currentHeatingSetpoint
-//    log.debug ("Parsed Thermostat Set Point: $map)
-
-	// So we can respond with same format
-	state.size = cmd.size
-	state.scale = cmd.scale
-	state.precision = cmd.precision
-	map
-    sendEvent(map)
-}
-
+// 1st Event - Get Battery Report 
 def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd) {
         def map = [ name: "battery", unit: "%" ]
         if (cmd.batteryLevel == 0xFF) {  // Special value for low battery alert
@@ -128,32 +117,51 @@ def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd) {
         createEvent(map)
 }
 
-// Battery powered devices can be configured to periodically wake up and check in. They send this
-// command and stay awake long enough to receive commands, or until they get a WakeUpNoMoreInformation
-// command that instructs them that there are no more commands to receive and they can stop listening
+// 2nd Event - Get Override Schedule
 
+// 3rd Event - Clock report
+
+// 4th Event - Manufacturer Specific Report
+
+// 5th Event - Multi Comand
+
+// 6th Event - Protection
+
+// 7th Event - Thermostat Report
+def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd)
+{
+	def cmdScale = cmd.scale == 1 ? "F" : "C"
+	def map = [:]
+	map.value = convertTemperatureIfNeeded(cmd.scaledValue, cmdScale, cmd.precision)
+	map.unit = getTemperatureScale()
+	map.displayed = false
+    map.name = "currentHeatingSetpoint"
+//    log.debug ("Parsed Thermostat Set Point: $map)
+
+	// So we can respond with same format
+	state.size = cmd.size
+	state.scale = cmd.scale
+	state.precision = cmd.precision
+	map
+    sendEvent(map)
+}
+
+// 8th Event - Version Report
+
+// 9th Event - Wake Up
 def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd)
 {
-    def result = [createEvent(descriptionText: "${device.displayName} woke up", isStateChange: false)]
-   // Only ask for battery if we haven't had a BatteryReport in a while
-   if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) {
-       result << response(zwave.batteryV1.batteryGet())
-       result << "delay 2000"
+        def result = [createEvent(descriptionText: "${device.displayName} woke up", isStateChange: false)]
+
+       // Only ask for battery if we haven't had a BatteryReport in a while
+       if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) {
+              result << response(zwave.batteryV1.batteryGet())
+              result << response("delay 2000")  // leave time for device to respond to batteryGet
        }
-    //send nextHeatingSetpoint to thermostat during wakeup
-    zwave.thermostatSetpointV1.thermostatSetpointSet(setpointType: 1, scale: deviceScale, precision: p, scaledValue: 28.0).format()
-    result << "delay 2000"
-    result << response(zwave.wakeUpV2.wakeUpNoMoreInformation())
-    result
+        result << response(zwave.wakeUpV1.wakeUpNoMoreInformation())
+        result
 }
 
-def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd) {
-	log.debug "Zwave event received: $cmd"
-}
-
-def zwaveEvent(physicalgraph.zwave.Command cmd) {
-	log.warn "Unexpected zwave command $cmd"
-}
 
 // Command Implementations
 def poll() {
@@ -189,7 +197,7 @@ def quickSetHeat(degrees) {
 	setNextHeatingSetpoint(degrees, 1000)
 }
 
-def nextHeatingSetpoint(degrees, delay = 30000) {
+def nextHeatingSetpoint(degrees, delay = 1000) {
 	setNextHeatingSetpoint(degrees.toDouble(), delay)
 }
 
