@@ -43,7 +43,7 @@ simulator {
 	tiles {
 		valueTile("temperature", "device.currentHeatingSetpoint", width: 3, height: 2) {
 			state("device.currentHeatingSetpoint", label:'${currentValue}°',
-                  backgroundColors:[
+                backgroundColors:[
                        [value: 0, color: "#ededed"],
                        [value: 4, color: "#153591"],
                        [value: 16, color: "#178998"],
@@ -57,7 +57,7 @@ simulator {
                        [value: 28, color: "#bc2323"]
 				]
 			)
-		}
+		} 
 	
         controlTile("heatSliderControl", "device.nextHeatingSetpoint", "slider", height: 1, width: 2, inactiveLabel: false, range:"(4..28)" ) {
 			state "setNextHeatingSetpoint", action: "quickSetHeat", backgroundColor:"#d04e00"
@@ -87,7 +87,7 @@ simulator {
 def parse(String description) {
     state.count = 0
     def results = []
-    //log.debug("RAW command: $description")
+    log.debug("RAW command: $description")
 	if (description.startsWith("Err")) {
 		log.debug("An error has occurred")
 		} 
@@ -122,29 +122,14 @@ def zwaveEvent(physicalgraph.zwave.commands.climatecontrolschedulev1.ScheduleOve
     log.debug "--- Schedule Override Report received: $cmd"
 }
 
-// Event - Clock report - No response yet
-def zwaveEvent(physicalgraph.zwave.commands.clockv1.ClockGet cmd){
-    log.debug "---Clock get recieved: $cmd"
-}
-
-// Event - Manufacturer Specific Report
-
-// Event - Multi Comand
-
-// Event - Protection - no Response Yet
-def zwaveEvent(physicalgraph.zwave.commands.protectionv2.ProtectionReport cmd){
-    log.debug "--- Protection Status Report: $cmd"
-}
-
 // Event - Thermostat Report
 def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd) {
-    log.debug "--- Thermostat Report recieved: $cmd"
 	def cmdScale = cmd.scale == 1 ? "F" : "C"
 	def map = [:]
 	map.value = convertTemperatureIfNeeded(cmd.scaledValue, cmdScale, cmd.precision)
 	map.unit = getTemperatureScale()
 	map.displayed = false
-    map.name = "currentHeatingSetpoint"
+    map.name = currentHeatingSetpoint
     log.debug ("Parsed Thermostat Set Point: $map")
 
 	// So we can respond with same format
@@ -155,21 +140,20 @@ def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpo
     sendEvent(map)
 }
 
-// Event - Version Report - No Response yet
-def zwaveEvent(physicalgraph.zwave.commands.versionv1.VersionCommandClassReport cmd){
-    log.debug "--- Version Report Recieved: $cmd"
-}
-
 // Event - Wake Up
 def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd) {
-    def result = [createEvent(descriptionText: "${device.displayName} woke up", isStateChange: true)]
-      
-    // Only ask for battery if we haven't had a BatteryReport in a while
-       if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) {
-              result << response(zwave.batteryV1.batteryGet())
-              result << response("delay 1200")  // leave time for device to respond to batteryGet
+    def result = [createEvent(descriptionText: "${device.displayName} woke up", isStateChange: false)]
+   // Only ask for battery if we haven't had a BatteryReport in a while
+   if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) {
+       result << response(zwave.batteryV1.batteryGet())
+       result << "delay 2000"
        }
-    result << response (configureSetPoint())
+    //send nextHeatingSetpoint to thermostat during wakeup
+    result << response (configureSetpoint(degrees, 1000))
+    result << response ("delay 2000")
+    result << response(zwave.wakeUpV1.wakeUpNoMoreInformation())
+    result << response ("delay 2000")
+    result
 }
 
 // Command Implementations
@@ -183,7 +167,7 @@ def quickSetHeat(degrees) {
 	setNextHeatingSetpoint(degrees, 1000)
 }
 
-def nextHeatingSetpoint(degrees, delay = 1000) {
+def nextHeatingSetpoint(degrees, delay = 30000) {
 	setNextHeatingSetpoint(degrees.toDouble(), delay)
 }
 
@@ -211,12 +195,26 @@ def setNextHeatingSetpoint(Double degrees, Integer delay) {
 }
 
 //send new set point to thermostat
-def configureSetPoint(){
-    log.debug "*** sending new setpoint"
+def configureSetpoint(Double degrees, Integer delay) {
+	log.trace "configureSetPoint($degrees, $delay)"
+	def deviceScale = state.scale ?: 2
+	def deviceScaleString = deviceScale == 2 ? "C" : "F"
+    def locationScale = getTemperatureScale()
+	def p = (state.precision == null) ? 1 : state.precision
+
+    def convertedDegrees
+    if (locationScale == "C" && deviceScaleString == "F") {
+    	convertedDegrees = celsiusToFahrenheit(degrees)
+    } else if (locationScale == "F" && deviceScaleString == "C") {
+    	convertedDegrees = fahrenheitToCelsius(degrees)
+    } else {
+    	convertedDegrees = degrees
+    }
+
     delayBetween([
-        zwave.thermostatSetpointV1.thermostatSetpointSet(setpointType: 1, scale: 0, precision: 2, scaledValue: 4.00).format()
-        ], 20000)
-}      
+        zwave.thermostatSetpointV1.thermostatSetpointSet(setpointType: 1, scale: deviceScale, precision:p, scaledValue: convertedDegrees).format()
+        ], 2000)
+}       
 
 //configuration
 def configure() {
@@ -227,7 +225,6 @@ def configure() {
 	], standardDelay)
 }
 
-//standardDelay
 private getStandardDelay() {
 	1000
 }
