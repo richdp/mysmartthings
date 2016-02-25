@@ -12,22 +12,29 @@
  *
  * 
  */
-
-//metadata fro smartapps
 metadata {
-	definition (name: "Danfoss LC13 TRV V1.1", namespace: "richdp", author: "RichardP") {
-		capability "actuator"
-        capability "battery"
-        capability "configuration"
-        capability "polling"
-        capability "refresh"
-        capability "thermostat setpoint"
-        
+	definition (name: "Danfoss LC13 TRV V0.3", namespace: "richdp", author: "RichardP") {
+		capability "Actuator"
+		capability "Temperature Measurement"
+		capability "Relative Humidity Measurement"
+		capability "Thermostat"
+		capability "Configuration"
+		capability "Polling"
+		capability "Sensor"
+        capability "Battery"
+		
+		attribute "thermostatFanState", "string"
+
+		command "switchMode"
+		command "switchFanMode"
+        command "quickSetCool"
+        command "quickSetHeat"
+
 		fingerprint deviceId: "0x0804"
 		fingerprint inClusters: "0x80, 0x46, 0x81, 0x72, 0x8F, 0x75, 0x43, 0x86, 0x84"
 	}
 
-// simulator metadata
+	// simulator metadata
 simulator {
 //		status "off"			: "command: 4003, payload: 00"
 //		status "heat"			: "command: 4003, payload: 01"
@@ -38,12 +45,10 @@ simulator {
 		// reply messages
 		reply "2502": "command: 2503, payload: FF"
 }
-
-//UI definition
 	tiles {
 		valueTile("temperature", "device.currentHeatingSetpoint", width: 3, height: 2) {
 			state("device.currentHeatingSetpoint", label:'${currentValue}°',
-                  backgroundColors:[
+                backgroundColors:[
                        [value: 0, color: "#ededed"],
                        [value: 4, color: "#153591"],
                        [value: 16, color: "#178998"],
@@ -57,7 +62,7 @@ simulator {
                        [value: 28, color: "#bc2323"]
 				]
 			)
-		}
+		} 
 	
         controlTile("heatSliderControl", "device.nextHeatingSetpoint", "slider", height: 1, width: 2, inactiveLabel: false, range:"(4..28)" ) {
 			state "setNextHeatingSetpoint", action: "quickSetHeat", backgroundColor:"#d04e00"
@@ -83,11 +88,11 @@ simulator {
 	}
 }
 
-// Parse Device 
-def parse(String description) {
+def parse(String description) 
+{
     state.count = 0
     def results = []
-    //log.debug("RAW command: $description")
+    log.debug("RAW command: $description")
 	if (description.startsWith("Err")) {
 		log.debug("An error has occurred")
 		} 
@@ -100,8 +105,26 @@ def parse(String description) {
     }
 }
 
+
 // Event Generation
-// Event - Get Battery Report 
+def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd)
+{
+	def cmdScale = cmd.scale == 1 ? "F" : "C"
+	def map = [:]
+	map.value = convertTemperatureIfNeeded(cmd.scaledValue, cmdScale, cmd.precision)
+	map.unit = getTemperatureScale()
+	map.displayed = false
+    map.name = currentHeatingSetpoint
+    log.debug ("Parsed Thermostat Set Point: $map")
+
+	// So we can respond with same format
+	state.size = cmd.size
+	state.scale = cmd.scale
+	state.precision = cmd.precision
+	map
+    sendEvent(map)
+}
+
 def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd) {
         def map = [ name: "battery", unit: "%" ]
         if (cmd.batteryLevel == 0xFF) {  // Special value for low battery alert
@@ -117,59 +140,32 @@ def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd) {
         createEvent(map)
 }
 
-// Event - Get Override Schedule
-def zwaveEvent(physicalgraph.zwave.commands.climatecontrolschedulev1.ScheduleOverrideReport cmd){
-    log.debug "--- Schedule Override Report received: $cmd"
-}
+// Battery powered devices can be configured to periodically wake up and check in. They send this
+// command and stay awake long enough to receive commands, or until they get a WakeUpNoMoreInformation
+// command that instructs them that there are no more commands to receive and they can stop listening
 
-// Event - Clock report - No response yet
-def zwaveEvent(physicalgraph.zwave.commands.clockv1.ClockGet cmd){
-    log.debug "---Clock get recieved: $cmd"
-}
-
-// Event - Manufacturer Specific Report
-
-// Event - Multi Comand
-
-// Event - Protection - no Response Yet
-def zwaveEvent(physicalgraph.zwave.commands.protectionv2.ProtectionReport cmd){
-    log.debug "--- Protection Status Report: $cmd"
-}
-
-// Event - Thermostat Report
-def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd) {
-    log.debug "--- Thermostat Report recieved: $cmd"
-	def cmdScale = cmd.scale == 1 ? "F" : "C"
-	def map = [:]
-	map.value = convertTemperatureIfNeeded(cmd.scaledValue, cmdScale, cmd.precision)
-	map.unit = getTemperatureScale()
-	map.displayed = false
-    map.name = "currentHeatingSetpoint"
-    log.debug ("Parsed Thermostat Set Point: $map")
-
-	// So we can respond with same format
-	state.size = cmd.size
-	state.scale = cmd.scale
-	state.precision = cmd.precision
-	map
-    sendEvent(map)
-}
-
-// Event - Version Report - No Response yet
-def zwaveEvent(physicalgraph.zwave.commands.versionv1.VersionCommandClassReport cmd){
-    log.debug "--- Version Report Recieved: $cmd"
-}
-
-// Event - Wake Up
-def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd) {
-    def result = [createEvent(descriptionText: "${device.displayName} woke up", isStateChange: true)]
-      
-    // Only ask for battery if we haven't had a BatteryReport in a while
-       if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) {
-              result << response(zwave.batteryV1.batteryGet())
-              result << response("delay 1200")  // leave time for device to respond to batteryGet
+def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd)
+{
+    def result = [createEvent(descriptionText: "${device.displayName} woke up", isStateChange: false)]
+   // Only ask for battery if we haven't had a BatteryReport in a while
+   if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) {
+       result << response(zwave.batteryV1.batteryGet())
+       result << "delay 2000"
        }
-    result << response (configureSetPoint())
+    //send nextHeatingSetpoint to thermostat during wakeup
+    result << response (configureSetpoint(degrees, 1000))
+    result << response ("delay 2000")
+    result << response(zwave.wakeUpV1.wakeUpNoMoreInformation())
+    result << response ("delay 2000")
+    result
+}
+
+def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd) {
+	log.debug "Zwave event received: $cmd"
+}
+
+def zwaveEvent(physicalgraph.zwave.Command cmd) {
+	log.warn "Unexpected zwave command $cmd"
 }
 
 // Command Implementations
@@ -179,11 +175,34 @@ def poll() {
     ], standardDelay)
 }
 
+//send new set point to thermostat
+def configureSetpoint(Double degrees, Integer delay) {
+	log.trace "configureSetPoint($degrees, $delay)"
+	def deviceScale = state.scale ?: 2
+	def deviceScaleString = deviceScale == 2 ? "C" : "F"
+    def locationScale = getTemperatureScale()
+	def p = (state.precision == null) ? 1 : state.precision
+
+    def convertedDegrees
+    if (locationScale == "C" && deviceScaleString == "F") {
+    	convertedDegrees = celsiusToFahrenheit(degrees)
+    } else if (locationScale == "F" && deviceScaleString == "C") {
+    	convertedDegrees = fahrenheitToCelsius(degrees)
+    } else {
+    	convertedDegrees = degrees
+    }
+
+    delayBetween([
+        zwave.thermostatSetpointV1.thermostatSetpointSet(setpointType: 1, scale: deviceScale, precision:p, scaledValue: convertedDegrees).format()
+        ], 2000)
+}     
+
 def quickSetHeat(degrees) {
 	setNextHeatingSetpoint(degrees, 1000)
+    configureSetpoint(degrees, 1000)
 }
 
-def nextHeatingSetpoint(degrees, delay = 1000) {
+def nextHeatingSetpoint(degrees, delay = 30000) {
 	setNextHeatingSetpoint(degrees.toDouble(), delay)
 }
 
@@ -210,15 +229,6 @@ def setNextHeatingSetpoint(Double degrees, Integer delay) {
 	], standardDelay)
 }
 
-//send new set point to thermostat
-def configureSetPoint(){
-    log.debug "*** sending new setpoint"
-    delayBetween([
-        zwave.thermostatSetpointV1.thermostatSetpointSet(setpointType: 1, scale: 0, precision: 2, scaledValue: 4.00).format()
-        ], 20000)
-}      
-
-//configuration
 def configure() {
 	delayBetween([
         zwave.configurationV1.configurationSet(parameterNumber:1, size:2, scaledConfigurationValue:100).format(),
@@ -227,7 +237,6 @@ def configure() {
 	], standardDelay)
 }
 
-//standardDelay
 private getStandardDelay() {
 	1000
 }
