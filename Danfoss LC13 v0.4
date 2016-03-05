@@ -1,0 +1,246 @@
+/**
+ *  Copyright 2015 SmartThings
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License. You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *  for the specific language governing permissions and limitations under the License.
+ *
+ * 
+ */
+
+//metadata for smartapps
+metadata {
+	definition (name: "Danfoss LC13 TRV V0.4", namespace: "richdp", author: "RichardP") {
+		capability "Actuator"
+		capability "Temperature Measurement"
+		capability "Thermostat"
+		capability "Configuration"
+		capability "Polling"
+		capability "Sensor"
+        capability "Battery"
+
+        command "quickSetHeat"
+
+		fingerprint deviceId: "0x0804"
+		fingerprint inClusters: "0x80, 0x46, 0x81, 0x72, 0x8F, 0x75, 0x43, 0x86, 0x84"
+	}
+
+// simulator metadata
+simulator {
+//		status "off"			: "command: 4003, payload: 00"
+//		status "heat"			: "command: 4003, payload: 01"
+//		status "cool"			: "command: 4003, payload: 02"
+//		status "auto"			: "command: 4003, payload: 03"
+
+
+//reply messages
+//		reply "2502": "command: 2503, payload: FF"
+}
+
+//UI configuration
+	tiles {
+        // Main Tile displays current set point recieved from thermostat. 
+        // Background color changes with temp.
+		valueTile("temperature", "device.currentHeatingSetpoint", width: 3, height: 2) {
+			state("device.currentHeatingSetpoint", label:'${currentValue}°',
+                  backgroundColors:[
+                       [value: 0, color: "#ededed"],
+                       [value: 4, color: "#153591"], //blue
+                       [value: 16, color: "#178998"],
+                       [value: 18, color: "#199f5c"],
+                       [value: 20, color: "#2da71c"],//green
+                       [value: 21, color: "#5baa1d"],
+                       [value: 22, color: "#8aae1e"],
+                       [value: 23, color: "#b1a81f"],
+                       [value: 24, color: "#b57d20"],
+                       [value: 26, color: "#b85122"],
+                       [value: 28, color: "#bc2323"] //red
+				]
+			)
+		}
+        
+        // Slider control for controling the set point which is next sent to the thermostat
+        controlTile("heatSliderControl", "device.nextHeatingSetpoint", "slider", height: 1, width: 2, inactiveLabel: false, range:"(4..28)" ) {
+			state "setNextHeatingSetpoint", action: "quickSetHeat", backgroundColor:"#d04e00"
+		}
+		
+        // Tile to indicate the set point that will next be sent to the thermostat. Controlled by controlTile above.
+        valueTile("nextHeatingSetpoint", "device.nextHeatingSetpoint", inactiveLabel: false, decoration: "flat") {
+			state "setNextHeatingSetpoint", label:'${currentValue}° next', backgroundColor:"#ffffff"
+		}
+
+        // Display battery %
+        valueTile("battery", "device.battery", inactiveLabel: false, decoration: "flat", width: 1, height: 1) {
+         	tileAttribute ("device.battery", key: "PRIMARY_CONTROL"){
+                        state "battery", label:'${currentValue}% battery', unit:""}
+        }
+
+        // Standard Refresh Tile
+		standardTile("refresh", "device.thermostatMode", inactiveLabel: false, decoration: "flat", width: 1, height: 1) {
+			state "default", action:"polling.poll", icon:"st.secondary.refresh"
+		}
+
+        // Standard Config Tile
+		standardTile("configure", "device.configure", inactiveLabel: false, decoration: "flat", width: 1, height: 1) {
+			state "configure", label:'', action:"configuration.configure", icon:"st.secondary.configure"
+		}
+
+        // Order of Tiles
+		main "temperature"
+		details(["temperature", "heatSliderControl", "nextHeatingSetpoint", "battery", "refresh", "configure"])
+	}
+} //end of UI config
+
+//Parse string to recieve information from device
+def parse(String description) {
+    state.count = 0
+    def results = []
+    log.debug("RAW command: $description")
+	if (description.startsWith("Err")) {
+		log.debug("An error has occurred")
+		} 
+    else {
+       	def cmd = zwave.parse(description,[0x80: 1, 0x46: 1, 0x81: 1, 0x72: 2, 0x8F: 1, 0x75: 2, 0x43: 2, 0x86: 1, 0x84: 2])
+        log.debug "Parsed Command: $cmd"
+        if (cmd) {
+       	results = zwaveEvent(cmd)
+		}
+    }
+}
+
+// Event Generation
+// Event - Get Battery Report 
+def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd) {
+        def map = [ name: "battery", unit: "%" ]
+        if (cmd.batteryLevel == 0xFF) {  // Special value for low battery alert
+                map.value = 1
+                map.descriptionText = "${device.displayName} has a low battery"
+                map.isStateChange = true
+        } else {
+                map.value = cmd.batteryLevel
+                log.debug ("Battery: $cmd.batteryLevel")
+        }
+        // Store time of last battery update so we don't ask every wakeup, see WakeUpNotification handler
+        state.lastbatt = new Date().time
+        createEvent(map)
+}
+
+// Event - Get Override Schedule
+def zwaveEvent(physicalgraph.zwave.commands.climatecontrolschedulev1.ScheduleOverrideReport cmd){
+    log.debug "--- Schedule Override Report received: $cmd"
+}
+
+// Event - Thermostat Report
+def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd) {
+    log.debug "--- Thermostat Report recieved: $cmd"
+	def cmdScale = cmd.scale == 1 ? "F" : "C"
+	def map = [:]
+	map.value = convertTemperatureIfNeeded(cmd.scaledValue, cmdScale, cmd.precision)
+	map.unit = getTemperatureScale()
+	map.displayed = false
+    map.name = "currentHeatingSetpoint"
+    log.debug ("Parsed Thermostat Set Point: $map")
+
+	// So we can respond with same format
+	state.size = cmd.size
+	state.scale = cmd.scale
+	state.precision = cmd.precision
+	map
+    sendEvent(map)
+}
+
+// Event for waking up the battery powered device
+/*
+def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd) {
+    def result = [createEvent(descriptionText: "${device.displayName} woke up", isStateChange: false)]
+    // Only ask for battery if we haven't had a BatteryReport in a while
+    if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) {
+       result << response(zwave.batteryV1.batteryGet())
+       result << "delay 2000"
+       }
+    // send nextHeatingSetpoint to thermostat during wakeup
+    result << response(quickSetHeat(degrees))
+
+    // result << response (configureSetpoint(degrees, 1000))
+    result << response ("delay 2000")
+
+    // wait and then send no more information confirmation
+    result << response(zwave.wakeUpV1.wakeUpNoMoreInformation())
+    result << response ("delay 2000")
+}*/
+
+// Event - Wake Up
+def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd) {
+    def result = [createEvent(descriptionText: "${device.displayName} woke up", isStateChange: true)]
+      
+    // Only ask for battery if we haven't had a BatteryReport in a while
+       if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) {
+              result << response(zwave.batteryV1.batteryGet())
+              result << response("delay 1200")  // leave time for device to respond to batteryGet
+       }
+    result << response (configureSetPoint())
+}
+
+// Command Implementations
+def poll() {
+	delayBetween([
+        zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1).format(),
+    ], standardDelay)
+}
+
+def quickSetHeat(degrees) {
+	setNextHeatingSetpoint(degrees, 1000)
+}
+
+def nextHeatingSetpoint(degrees, delay = 2000) {
+	setNextHeatingSetpoint(degrees.toDouble(), delay)
+}
+
+def setNextHeatingSetpoint(Double degrees, Integer delay) {
+	log.trace "setNextHeatingSetpoint($degrees, $delay)"
+	def deviceScale = state.scale ?: 2
+	def deviceScaleString = deviceScale == 2 ? "C" : "F"
+    def locationScale = getTemperatureScale()
+	def p = (state.precision == null) ? 1 : state.precision
+
+    def convertedDegrees
+    if (locationScale == "C" && deviceScaleString == "F") {
+    	convertedDegrees = celsiusToFahrenheit(degrees)
+    } else if (locationScale == "F" && deviceScaleString == "C") {
+    	convertedDegrees = fahrenheitToCelsius(degrees)
+    } else {
+    	convertedDegrees = degrees
+    }
+
+    sendEvent(name:"nextHeatingSetpoint", value:convertedDegrees, isStateChange: true)
+    log.debug ("Value to be sent to thermostat on next wakeup: $convertedDegrees")
+
+}
+
+
+//send new set point to thermostat
+def configureSetPoint(){
+    log.debug "*** sending new setpoint"
+    delayBetween([
+        zwave.thermostatSetpointV1.thermostatSetpointSet(setpointType: 1, scale: 0, precision: 2, scaledValue: nextHeatingSetpoint).format()
+        ], 20000)
+}      
+
+//configuration
+def configure() {
+	delayBetween([
+        zwave.configurationV1.configurationSet(parameterNumber:1, size:2, scaledConfigurationValue:100).format(),
+        zwave.associationV1.associationSet(groupingIdentifier:1, nodeId:[zwaveHubNodeId]).format(),    	
+        zwave.wakeUpV1.wakeUpIntervalSet(seconds:300, nodeid:zwaveHubNodeId).format()
+	], standardDelay)
+}
+
+//standardDelay
+private getStandardDelay() {
+	1000
+}
